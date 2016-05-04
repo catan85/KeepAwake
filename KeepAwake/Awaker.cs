@@ -34,7 +34,10 @@ namespace KeepAwake
         }
         public void Stop()
         {
-            worker.Abort();
+            if (isStarted)
+            {
+                worker.Abort();
+            }
             worker = null;
         }
         void worker_thread()

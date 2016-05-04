@@ -1,94 +1,92 @@
 ﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
+using System.Diagnostics;
+using System.Collections.Generic;
+using System.Configuration;
 
 namespace KeepAwake
 {
     class Program
     {
+
         public static void Main()
         {
             var program = new Program();
             program.run();
         }
 
-        NotifyIcon notifyicon;
-        MenuItem mtNoScreenSaver, mtNoScreenShutdown, mtNoSystemSleep;
-        MenuItem mtForever, mtTiming, mtStart, mtExit;
+        PerformanceCounter readBytesSec;
+        PerformanceCounter writeByteSec;
+        PerformanceCounter dataBytesSec;
+
+        string pn = ConfigurationManager.AppSettings["ProcessName"];
+        
         public void run()
         {
-            var menu = new ContextMenu();
-            mtNoScreenSaver = menu.MenuItems.Add("阻止屏保", NoScreenSaver);
-            mtNoScreenShutdown = menu.MenuItems.Add("阻止关闭屏幕", NoScreenShutdown);
-            mtNoSystemSleep = menu.MenuItems.Add("阻止待机（睡眠）", NoSystemSleep);
-            mtNoScreenSaver.Enabled = false;
-            mtNoScreenShutdown.Enabled = false;
-            mtNoSystemSleep.Checked = true;
-            menu.MenuItems.Add("-");
+            
+            readBytesSec = new PerformanceCounter("Process", "IO Read Bytes/sec", pn);
+            writeByteSec = new PerformanceCounter("Process", "IO Write Bytes/sec", pn);
+            dataBytesSec = new PerformanceCounter("Process", "IO Data Bytes/sec", pn);
 
-            mtForever = menu.MenuItems.Add("长期", Forever);
-            mtTiming = menu.MenuItems.Add("计时", Timing);
-            mtForever.Checked = true;
-            mtTiming.Enabled = false;
-            menu.MenuItems.Add("-");
+            while (true)
+            {
+                getProcessMeasures();
 
-            foreach (var item in menu.MenuItems)
-                (item as MenuItem).RadioCheck = true;
-
-            mtStart = menu.MenuItems.Add("开始", OnStartStop);
-            mtExit = menu.MenuItems.Add("退出", OnExit);
-            mtStart.Tag = "停止";
-
-            notifyicon = new NotifyIcon();
-            notifyicon.ContextMenu = menu;
-            notifyicon.Visible = true;
-            notifyicon.Icon = SystemIcons.Shield;
-            Application.Run();
-        }
-
-        private void NoScreenSaver(object sender, EventArgs e)
-        {
-            mtNoScreenSaver.Checked = true;
-            mtNoScreenShutdown.Checked = false;
-            mtNoSystemSleep.Checked = false;
-        }
-        private void NoScreenShutdown(object sender, EventArgs e)
-        {
-            mtNoScreenSaver.Checked = false;
-            mtNoScreenShutdown.Checked = true;
-            mtNoSystemSleep.Checked = false;
-        }
-        private void NoSystemSleep(object sender, EventArgs e)
-        {
-            mtNoScreenSaver.Checked = false;
-            mtNoScreenShutdown.Checked = false;
-            mtNoSystemSleep.Checked = true;
-        }
-        private void Forever(object sender, EventArgs e)
-        {
-            mtForever.Checked = true;
-            mtTiming.Checked = false;
-        }
-        private void Timing(object sender, EventArgs e)
-        {
-            mtForever.Checked = false;
-            mtTiming.Checked = true;
+                System.Threading.Thread.Sleep(5000);
+            }
         }
 
         Awaker awaker = new Awaker();
-        private void OnStartStop(object sender, EventArgs e)
+
+        
+
+
+        private void getProcessMeasures()
         {
-            var s = mtStart.Tag as string;
-            mtStart.Tag = mtStart.Text;
-            mtStart.Text = s;
-            if (awaker.isStarted) awaker.Stop();
-            else awaker.Start();
+
+            List<PerformanceCounter> counters = new List<PerformanceCounter>
+                        {
+                        readBytesSec,
+                        writeByteSec,
+                        dataBytesSec
+                        };
+
+
+            bool valueExeedLimit = false;
+
+            // get current counter value and check if it exeed the speed limit
+            foreach (PerformanceCounter counter in counters)
+            {
+                try
+                {
+                    float rawValue = counter.NextValue();
+                    Console.WriteLine(counter.CounterName + "\t\tKb/s:\t" + (rawValue/1000).ToString());
+
+                    if ((rawValue / 1000) > Convert.ToInt32(ConfigurationManager.AppSettings["ProcessSpeedLimit"]))
+                    {
+                        valueExeedLimit = true;
+                    }
+
+                }catch(Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+            }
+
+            // If a value exeed the speed limit (upload or download transfer rate), then start the awaker, else stop it
+            if (valueExeedLimit) 
+            { 
+                awaker.Start(); 
+            } 
+            else 
+            { 
+                awaker.Stop(); 
+            }
+
+
         }
-        private void OnExit(object sender, EventArgs e)
-        {
-            awaker.Stop();
-            notifyicon.Visible = false;
-            Application.Exit();
-        }
+
+
     }
 }
