@@ -1,4 +1,4 @@
-# KeepAwake
+# KeepAwakeWhenTransfering
 Keeping windows from sleeping.
 It avoid Windows to go to sleep.
 Every 5 seconds it checks when a configured process has a transfer speed that exeed a configured limit (in Kb/s).
